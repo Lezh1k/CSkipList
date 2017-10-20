@@ -6,20 +6,23 @@
 #include "LFSkipList.h"
 #include "LFSortedList.h"
 #include "Interlocked.h"
+#include "Commons.h"
 
 //lock free skip list node
-typedef struct lfss_node {
-  struct lfss_node *next;
-  struct lfss_node *nextLevel;
+typedef struct lf_skiplist_node {
+  struct lf_skiplist_node *next;
+  struct lf_skiplist_node *nextLevel;
   void *data;
   uint32_t key;
-} __attribute__((aligned(sizeof(8)))) lfss_node_t;
+} __attribute__((aligned(sizeof(8)))) lf_skiplist_node_t;
 
-lfss_node_t *lfssNodeCreate(uint32_t key, void *data);
-void lfssNodeFree(lfss_node_t *node);
+static lf_skiplist_node_t *lfSkipListNodeCreate(uint32_t key,
+                                          void *data);
+static void lfSkipListNodeFree(lf_skiplist_node_t *node) __attribute_used__;
 
-lfss_node_t *lfssNodeCreate(uint32_t key, void *data) {
-  lfss_node_t *res = (lfss_node_t*) malloc(sizeof(lfss_node_t));
+lf_skiplist_node_t *lfSkipListNodeCreate(uint32_t key,
+                                   void *data) {
+  lf_skiplist_node_t *res = (lf_skiplist_node_t*) malloc(sizeof(lf_skiplist_node_t));
   if (res == NULL) return NULL;
   res->next = NULL;
   res->nextLevel = NULL;
@@ -29,7 +32,8 @@ lfss_node_t *lfssNodeCreate(uint32_t key, void *data) {
 }
 ////////////////////////////////////////////////////////////////////////////
 
-void lfssNodeFree(lfss_node_t *node) {
+void lfSkipListNodeFree(lf_skiplist_node_t *node) {
+  UNUSED_ARG(node);
   if (node) free(node);
 }
 ////////////////////////////////////////////////////////////////////////////
@@ -37,14 +41,13 @@ void lfssNodeFree(lfss_node_t *node) {
 ////////////////////////////////////////////////////////////////////////////
 
 typedef struct lf_skip_list {
-  lfss_node_t **lstHead;
-  lfss_node_t **lstTail;
+  lf_skiplist_node_t **lstHead;
+  lf_skiplist_node_t **lstTail;
   int32_t maxLevel;
 } lf_skip_list_t;
 
-static lfss_node_t *search(lf_sorted_list_t *lst, uint32_t key,
-                           lfss_node_t **leftNode);
-
+static lf_skiplist_node_t *searchOnLevel(lf_skip_list_t *lst, int32_t level, lf_skiplist_node_t *startNode, uint32_t key,
+                                         lf_skiplist_node_t **lNode);
 
 lf_skip_list_t* LFSkipListCreate(int32_t maxLevel) {
   assert(maxLevel);
@@ -54,20 +57,20 @@ lf_skip_list_t* LFSkipListCreate(int32_t maxLevel) {
     return NULL;
 
   res->maxLevel = maxLevel;
-  if (!(res->lstHead = (lfss_node_t**) malloc(sizeof(lfss_node_t*) * maxLevel)))
+  if (!(res->lstHead = (lf_skiplist_node_t**) malloc(sizeof(lf_skiplist_node_t*) * maxLevel)))
     return NULL;
-  memset(res->lstHead, 0, sizeof(lfss_node_t*) * maxLevel);
+  memset(res->lstHead, 0, sizeof(lf_skiplist_node_t*) * maxLevel);
 
-  if (!(res->lstTail = (lfss_node_t**) malloc(sizeof(lfss_node_t*) * maxLevel))) {
+  if (!(res->lstTail = (lf_skiplist_node_t**) malloc(sizeof(lf_skiplist_node_t*) * maxLevel))) {
     free(res->lstHead);
     return NULL;
   }
-  memset(res->lstTail, 0, sizeof(lfss_node_t*) * maxLevel);
+  memset(res->lstTail, 0, sizeof(lf_skiplist_node_t*) * maxLevel);
 
-
-  while (--maxLevel >= 0) {
-    res->lstHead[maxLevel] = lfssNodeCreate(-1, NULL);
-    res->lstTail[maxLevel] = lfssNodeCreate(-2, NULL);
+  --maxLevel;
+  while (maxLevel--) {
+    res->lstHead[maxLevel] = lfSkipListNodeCreate(-1, NULL);
+    res->lstTail[maxLevel] = lfSkipListNodeCreate(-2, NULL);
 
     if (!(res->lstHead[maxLevel] && res->lstTail[maxLevel]))
       break;
@@ -98,16 +101,82 @@ void LFSkipListFree(lf_skip_list_t *lst) {
 }
 ////////////////////////////////////////////////////////////////////////////
 
-lfss_node_t* search(lf_sorted_list_t *lst, uint32_t key,
-                    lfss_node_t **leftNode) {
-  return NULL;
+lf_skiplist_node_t* searchOnLevel(lf_skip_list_t *lst,
+                                  int32_t level,
+                                  lf_skiplist_node_t *startNode,
+                                  uint32_t key,
+                                  lf_skiplist_node_t **lNode) {
+  lf_skiplist_node_t *lNodeNext, *rNode;
+  do {
+    lf_skiplist_node_t *tmp = startNode;
+    lf_skiplist_node_t *tmpNext = startNode->next;
+
+    /* 1: Find left_node and right_node */
+    do {
+      if (!isMarkedPtr(tmpNext)) {
+        *lNode = tmp;
+        lNodeNext = tmpNext;
+      }
+      tmp = unmarkedPtr(tmpNext);
+      if (tmp == lst->lstTail[level]) break;
+      tmpNext = tmp->next;
+    } while (isMarkedPtr(tmpNext) || (tmp->key < key));
+    rNode = tmp;
+
+    /* 2: Check nodes are adjacent */
+    if (lNodeNext == rNode) {
+      if ((rNode != lst->lstTail[level]) && isMarkedPtr(rNode->next)) { //already removed by another thread?
+        continue; //search again
+      } else {
+        return rNode;
+      }
+    }
+
+    /* 3: Remove one or more marked nodes */
+    if (CompareAndSwapX64Ptr((volatile void**)&(*lNode)->next, (void**) &lNodeNext, rNode)) {
+      if ((rNode != lst->lstTail[level]) && isMarkedPtr(rNode->next)) { //already removed by another thread?
+        continue; //search again
+      } else {
+        return rNode;
+      }
+    }
+  } while (1);
 }
 ////////////////////////////////////////////////////////////////////////////
 
 uint8_t LFSkipListAdd(lf_skip_list_t *lst,
                       uint32_t key,
                       void *val) {
-  return 0;
+  int32_t cl ;
+  lf_skiplist_node_t **prev = (lf_skiplist_node_t**) malloc(lst->maxLevel*sizeof(lf_skiplist_node_t*));
+  lf_skiplist_node_t *lNode, *rNode, *nNode, *startNode;
+  if (prev == NULL)
+    return LFE_FAILED;
+
+  nNode = lfSkipListNodeCreate(key, val);
+
+  do {
+    cl = lst->maxLevel;
+    startNode = lst->lstHead[cl-1];
+
+    while(cl--) {
+      rNode = searchOnLevel(lst, cl, startNode, key, &lNode);
+      if ((rNode != lst->lstTail[cl]) && (rNode->key == key)) {
+        free(nNode);
+        free(prev);
+        return LFE_ALREADY_DONE;
+      }
+      prev[cl] = lNode;
+      startNode = lNode->nextLevel;
+    }
+
+    nNode->next = rNode;
+    if (CompareAndSwapX64Ptr((volatile void**)&lNode->next, (void**) &rNode, nNode)) {
+      free(prev);
+      return LFE_SUCCESS;
+    }
+  } while (1);
+
 }
 ////////////////////////////////////////////////////////////////////////////
 

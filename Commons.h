@@ -25,5 +25,11 @@ static inline void* markedPtr(const void *ref) {
   return (void*)((uint64_t)ref | 0x01);
 }
 
+typedef enum LF_ERROR {
+  LFE_SUCCESS = 0,
+  LFE_ALREADY_DONE,
+  LFE_FAILED
+} LF_ERROR_T;
+
 
 #endif // COMMONS_H

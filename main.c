@@ -8,7 +8,8 @@
 
 lf_sorted_list_t *lst = NULL;
 
-#define STEP 10
+#define STEP 20
+#define SLEEP 300
 
 void* lfAddT1(void* t);
 void* lfAddT2(void* t);
@@ -23,7 +24,7 @@ void* lfAddT1(void* t) {
   (void)t;
   for (i = 0; i < STEP; ++i) {
     LFSortedListAdd(lst, i, NULL);
-    usleep(3);
+    usleep(SLEEP);
   }
   return NULL;
 }
@@ -33,7 +34,7 @@ void* lfAddT2(void* t) {
   (void)t;
   for (i = STEP; i < STEP*2; ++i) {
     LFSortedListAdd(lst, i, NULL);
-    usleep(2);
+    usleep(SLEEP);
   }
   return NULL;
 }
@@ -43,7 +44,7 @@ void* lfAddT3(void* t) {
   (void)t;
   for (i = STEP*2; i < STEP*3; ++i) {
     LFSortedListAdd(lst, i, NULL);
-    usleep(1);
+    usleep(SLEEP);
   }
   return NULL;
 }
@@ -54,27 +55,29 @@ void* lfRemoveT1(void* t) {
   (void)t;
   for (i = 0; i < STEP; i += 2) {
     LFSortedListRemove(lst, i);
-    usleep(3);
+    usleep(SLEEP);
   }
   return NULL;
 }
+////////////////////////////////////////////////////////////////////////////
 
 void* lfRemoveT2(void* t) {
   uint32_t i;
   (void)t;
   for (i = STEP; i < STEP*2; i += 2) {
     LFSortedListRemove(lst, i);
-    usleep(2);
+    usleep(SLEEP);
   }
   return NULL;
 }
+////////////////////////////////////////////////////////////////////////////
 
 void* lfRemoveT3(void* t) {
   uint32_t i;
   (void)t;
   for (i = STEP*2; i < STEP*3; i += 2) {
     LFSortedListRemove(lst, i);
-    usleep(1);
+    usleep(SLEEP);
   }
   return NULL;
 }
@@ -120,6 +123,24 @@ int main() {
     pthread_join(thRemove[i], NULL);
   }
   LFSortedListPrint(lst);
+  printf("\n*****************\n");
+
+  /*test both*/
+
+  for (i = 0; i < 3; ++i) {
+    pthread_attr_init(&thAttrAdd[i]);
+    pthread_attr_init(&thAttrRemove[i]);
+    pthread_create(&thAdd[i], &thAttrAdd[i], pfAddTest[i], NULL);
+    pthread_create(&thRemove[i], &thAttrRemove[i], pfRemoveTest[i], NULL);
+  }
+
+  for (i = 0; i < 3; ++i) {
+    pthread_join(thAdd[i], NULL);
+    pthread_join(thRemove[i], NULL);
+  }
+  LFSortedListPrint(lst);
+  printf("\n*****************\n");
+
   return 0;
 }
 ////////////////////////////////////////////////////////////////////////////
