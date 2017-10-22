@@ -2,8 +2,11 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <time.h>
+#include <stdlib.h>
 
 #include "LFSortedList.h"
+#include "LFSkipList.h"
 ////////////////////////////////////////////////////////////////////////////
 
 lf_sorted_list_t *lst = NULL;
@@ -81,9 +84,8 @@ void* lfRemoveT3(void* t) {
   }
   return NULL;
 }
-////////////////////////////////////////////////////////////////////////////
 
-int main() {
+void testSortedList() {
   pthread_t thAdd[3];
   pthread_attr_t thAttrAdd[3];
   void *(*pfAddTest[3])(void*) = {lfAddT1, lfAddT2, lfAddT3};
@@ -93,7 +95,6 @@ int main() {
   void *(*pfRemoveTest[3])(void*) = {lfRemoveT1, lfRemoveT2, lfRemoveT3};
 
   int32_t i;
-
   lst = LFSortedListCreate();
   if (lst == NULL) {
     printf("Couldn't create LFSorteList\n");
@@ -140,6 +141,30 @@ int main() {
   }
   LFSortedListPrint(lst);
   printf("\n*****************\n");
+
+}
+////////////////////////////////////////////////////////////////////////////
+
+#define MAX_LEVEL 16
+#define TEST_VAL 3000
+int main() {
+  int i;
+  lf_skip_list_t *lstSkip = LFSkipListCreate();
+  lf_sorted_list_t *lstSorted = LFSortedListCreate();
+  if (lstSkip == NULL)
+    return 1;
+
+  if (lstSorted == NULL)
+    return 2;
+
+  srand(time(NULL));
+
+
+  for (i = 0; i < TEST_VAL; ++i)
+    LFSkipListAdd(lstSkip, i, NULL);
+
+  for (i = 0; i < TEST_VAL; ++i)
+    LFSortedListAdd(lstSorted, i, NULL);
 
   return 0;
 }

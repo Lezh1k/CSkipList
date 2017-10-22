@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-uint8_t CompareAndSwapX64Ptr(volatile void **ptr,
+uint8_t CASX64Ptr(volatile void **ptr,
                              void **oldVal,
                              void *newVal);
 

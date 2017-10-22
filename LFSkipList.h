@@ -5,7 +5,7 @@
 
 typedef struct lf_skip_list lf_skip_list_t;
 
-lf_skip_list_t* LFSkipListCreate(int32_t maxLevel);
+lf_skip_list_t* LFSkipListCreate();
 void LFSkipListFree(lf_skip_list_t *lst);
 
 uint8_t LFSkipListAdd(lf_skip_list_t *lst, uint32_t key, void *val);

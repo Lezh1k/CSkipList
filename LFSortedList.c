@@ -87,7 +87,7 @@ static lf_sortedlist_node_t *search(lf_sorted_list_t *lst,
     }
 
     /* 3: Remove one or more marked nodes */
-    if (CompareAndSwapX64Ptr((volatile void**)&(*lNode)->next, (void**) &lNodeNext, rNode)) {
+    if (CASX64Ptr((volatile void**)&(*lNode)->next, (void**) &lNodeNext, rNode)) {
       if ((rNode != lst->tail) && isMarkedPtr(rNode->next)) { //already removed by another thread?
         continue; //search again
       } else {
@@ -110,7 +110,7 @@ uint8_t LFSortedListAdd(lf_sorted_list_t *lst,
       return LFE_ALREADY_DONE;
     }
     nNode->next = rNode;
-    if (CompareAndSwapX64Ptr((volatile void**)&lNode->next, (void**) &rNode, nNode))
+    if (CASX64Ptr((volatile void**)&lNode->next, (void**) &rNode, nNode))
       return LFE_SUCCESS;
   } while (1);
 }
@@ -127,11 +127,11 @@ uint8_t LFSortedListRemove(lf_sorted_list_t *lst,
     rNodeNext = rNode->next;
     if (isMarkedPtr(rNodeNext))
       continue;
-    if (CompareAndSwapX64Ptr((volatile void**)&rNode->next, (void**)&rNodeNext, markedPtr(rNodeNext)))
+    if (CASX64Ptr((volatile void**)&rNode->next, (void**)&rNodeNext, markedPtr(rNodeNext)))
       break;
   } while (1);
 
-  if (!CompareAndSwapX64Ptr((volatile void**)&lNode->next, (void**)&rNode, rNodeNext))
+  if (!CASX64Ptr((volatile void**)&lNode->next, (void**)&rNode, rNodeNext))
     rNode = search(lst, rNode->key, &lNode);
   return LFE_SUCCESS;
 }
