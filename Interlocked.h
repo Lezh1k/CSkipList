@@ -3,9 +3,9 @@
 
 #include <stdint.h>
 
-uint8_t CASX64Ptr(volatile void **ptr,
-                             void **oldVal,
-                             void *newVal);
+uint8_t CASPtr(volatile void **ptr,
+               void **oldVal,
+               void *newVal);
 
 
 #endif // INTERLOCKED_H

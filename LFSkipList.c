@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "LFSkipList.h"
 #include "LFSortedList.h"
@@ -44,7 +45,10 @@ typedef struct lf_skip_list {
   lf_skiplist_node_t *tail;
 } lf_skip_list_t;
 
-static lf_skiplist_node_t *searchOnLevel(lf_skip_list_t *lst, int32_t level, lf_skiplist_node_t *startNode, uint32_t key,
+static lf_skiplist_node_t *searchOnLevel(lf_skip_list_t *lst,
+                                         int32_t level,
+                                         lf_skiplist_node_t *startNode,
+                                         uint32_t key,
                                          lf_skiplist_node_t **lNode);
 
 lf_skip_list_t* LFSkipListCreate() {
@@ -89,19 +93,19 @@ lf_skiplist_node_t* searchOnLevel(lf_skip_list_t *lst,
 
     /* 1: Find left_node and right_node */
     do {
-      if (!isMarkedPtr(tmpNext)) {
+      if (!IsMarkedPtr(tmpNext)) {
         *lNode = tmp;
         lNodeNext = tmpNext;
       }
-      tmp = unmarkedPtr(tmpNext);
+      tmp = UnmarkedPtr(tmpNext);
       if (tmp == lst->tail) break;
       tmpNext = tmp->next[level];
-    } while (isMarkedPtr(tmpNext) || (tmp->key < key));
+    } while (IsMarkedPtr(tmpNext) || (tmp->key < key));
     rNode = tmp;
 
     /* 2: Check nodes are adjacent */
     if (lNodeNext == rNode) {
-      if ((rNode != lst->tail) && isMarkedPtr(rNode->next[level])) { //already removed by another thread?
+      if ((rNode != lst->tail) && IsMarkedPtr(rNode->next[level])) { //already removed by another thread?
         continue; //search again
       } else {
         return rNode;
@@ -109,8 +113,8 @@ lf_skiplist_node_t* searchOnLevel(lf_skip_list_t *lst,
     }
 
     /* 3: Remove one or more marked nodes */
-    if (CASX64Ptr((volatile void**)&(*lNode)->next[level], (void**) &lNodeNext, rNode)) {
-      if ((rNode != lst->tail) && isMarkedPtr(rNode->next[level])) { //already removed by another thread?
+    if (CASPtr((volatile void**)&(*lNode)->next[level], (void**) &lNodeNext, rNode)) {
+      if ((rNode != lst->tail) && IsMarkedPtr(rNode->next[level])) { //already removed by another thread?
         continue; //search again
       } else {
         return rNode;
@@ -132,10 +136,8 @@ uint8_t LFSkipListAdd(lf_skip_list_t *lst,
   nNode = lfSkipListNodeCreate(key, val);
 
   do {
-    cl = MAX_LEVEL;
     startNode = lst->head;
-
-    while(cl--) {
+    for (cl = MAX_LEVEL; cl--;) {
       rNode = searchOnLevel(lst, cl, startNode, key, &lNode);
       if ((rNode != lst->tail) && (rNode->key == key)) {
         free(nNode);
@@ -146,23 +148,22 @@ uint8_t LFSkipListAdd(lf_skip_list_t *lst,
       nNode->next[cl] = rNode;
       startNode = lNode;
     }
-    ++cl;
+    assert(cl == -1);
 
-    if (CASX64Ptr((volatile void**)&lNode->next[cl], (void**) &rNode, nNode)) {
-      int32_t lvl = 0;
-      while (rand() & 0x1 && ++lvl < MAX_LEVEL)
-        ;
-
+    if (CASPtr((volatile void**)&lNode->next[0],
+               (void**) &rNode, nNode)) {
+      //inserted on 0 level
+      int32_t lvl = GenRandomBase2(MAX_LEVEL);
       for (cl = 1; cl <= lvl; ++cl) {
-        do {
-          if (CASX64Ptr((volatile void**)&prev[cl]->next[cl],
-                        (void**) &nNode->next[cl], nNode)) {
-            break;
-          }
+        if (CASPtr((volatile void**)&prev[cl]->next[cl],
+                      (void**) &nNode->next[cl], nNode)) {
+          continue;
+        }
 
+        do {
           rNode = searchOnLevel(lst, cl, lst->head, key, &lNode);
           nNode->next[cl] = rNode;
-          if (CASX64Ptr((volatile void**)&lNode->next[cl], (void**) &rNode, nNode)) {
+          if (CASPtr((volatile void**)&lNode->next[cl], (void**) &rNode, nNode)) {
             break;
           }
         } while(1);
@@ -170,13 +171,30 @@ uint8_t LFSkipListAdd(lf_skip_list_t *lst,
 
       free(prev);
       return LFE_SUCCESS;
-    }
+    } //if CAS
   } while (1);
 }
 ////////////////////////////////////////////////////////////////////////////
 
 uint8_t LFSkipListRemove(lf_skip_list_t *lst,
                          uint32_t key) {
+  int32_t cl;
+  lf_skiplist_node_t *rNode, *lNode, *startNode;
+
+  do {
+    startNode = lst->head;
+    for (cl = MAX_LEVEL; cl--;) {
+      rNode = searchOnLevel(lst, cl, startNode, key, &lNode);
+      if ((rNode != lst->tail) && (rNode->key == key)) {
+        break;
+      }
+    }
+
+    if (cl == -1)
+      return LFE_FAILED;
+
+
+  } while (1);
 
   return LFE_FAILED;
 }

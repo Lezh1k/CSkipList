@@ -14,15 +14,15 @@ lf_sorted_list_t *lst = NULL;
 #define STEP 20
 #define SLEEP 300
 
-void* lfAddT1(void* t);
-void* lfAddT2(void* t);
-void* lfAddT3(void* t);
+void* sortedListAddT1(void* t);
+void* sortedListAddT2(void* t);
+void* sortedListAddT3(void* t);
 
-void* lfRemoveT1(void* t);
-void* lfRemoveT2(void* t);
-void* lfRemoveT3(void* t);
+void* sortedListRemoveT1(void* t);
+void* sortedListRemoveT2(void* t);
+void* sortedListRemoveT3(void* t);
 
-void* lfAddT1(void* t) {
+void* sortedListAddT1(void* t) {
   uint32_t i;
   (void)t;
   for (i = 0; i < STEP; ++i) {
@@ -32,7 +32,7 @@ void* lfAddT1(void* t) {
   return NULL;
 }
 
-void* lfAddT2(void* t) {
+void* sortedListAddT2(void* t) {
   uint32_t i;
   (void)t;
   for (i = STEP; i < STEP*2; ++i) {
@@ -42,7 +42,7 @@ void* lfAddT2(void* t) {
   return NULL;
 }
 
-void* lfAddT3(void* t) {
+void* sortedListAddT3(void* t) {
   uint32_t i;
   (void)t;
   for (i = STEP*2; i < STEP*3; ++i) {
@@ -53,7 +53,7 @@ void* lfAddT3(void* t) {
 }
 ////////////////////////////////////////////////////////////////////////////
 
-void* lfRemoveT1(void* t) {
+void* sortedListRemoveT1(void* t) {
   uint32_t i;
   (void)t;
   for (i = 0; i < STEP; i += 2) {
@@ -64,7 +64,7 @@ void* lfRemoveT1(void* t) {
 }
 ////////////////////////////////////////////////////////////////////////////
 
-void* lfRemoveT2(void* t) {
+void* sortedListRemoveT2(void* t) {
   uint32_t i;
   (void)t;
   for (i = STEP; i < STEP*2; i += 2) {
@@ -75,7 +75,7 @@ void* lfRemoveT2(void* t) {
 }
 ////////////////////////////////////////////////////////////////////////////
 
-void* lfRemoveT3(void* t) {
+void* sortedListRemoveT3(void* t) {
   uint32_t i;
   (void)t;
   for (i = STEP*2; i < STEP*3; i += 2) {
@@ -88,17 +88,17 @@ void* lfRemoveT3(void* t) {
 void testSortedList() {
   pthread_t thAdd[3];
   pthread_attr_t thAttrAdd[3];
-  void *(*pfAddTest[3])(void*) = {lfAddT1, lfAddT2, lfAddT3};
+  void *(*pfAddTest[3])(void*) = {sortedListAddT1, sortedListAddT2, sortedListAddT3};
 
   pthread_t thRemove[3];
   pthread_attr_t thAttrRemove[3];
-  void *(*pfRemoveTest[3])(void*) = {lfRemoveT1, lfRemoveT2, lfRemoveT3};
+  void *(*pfRemoveTest[3])(void*) = {sortedListRemoveT1, sortedListRemoveT2, sortedListRemoveT3};
 
   int32_t i;
   lst = LFSortedListCreate();
   if (lst == NULL) {
     printf("Couldn't create LFSorteList\n");
-    return -1;
+    return;
   }
 
   /*test add*/
@@ -146,26 +146,18 @@ void testSortedList() {
 ////////////////////////////////////////////////////////////////////////////
 
 #define MAX_LEVEL 16
-#define TEST_VAL 3000
+#define TEST_VAL 30
 int main() {
   int i;
   lf_skip_list_t *lstSkip = LFSkipListCreate();
-  lf_sorted_list_t *lstSorted = LFSortedListCreate();
   if (lstSkip == NULL)
     return 1;
-
-  if (lstSorted == NULL)
-    return 2;
-
   srand(time(NULL));
-
 
   for (i = 0; i < TEST_VAL; ++i)
     LFSkipListAdd(lstSkip, i, NULL);
 
-  for (i = 0; i < TEST_VAL; ++i)
-    LFSortedListAdd(lstSorted, i, NULL);
-
+  LFSkipListPrint(lstSkip);
   return 0;
 }
 ////////////////////////////////////////////////////////////////////////////

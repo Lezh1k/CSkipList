@@ -15,7 +15,7 @@ typedef struct lf_sortedlist_node {
 } __attribute__((aligned(sizeof(8)))) lf_sortedlist_node_t;
 
 static lf_sortedlist_node_t *lfSortedListNodeCreate(uint32_t key_, void *val_);
-static void lfSortedListNodeFree(lf_sortedlist_node_t *lf_sortedlist_node);
+static void lfSortedListNodeFree(lf_sortedlist_node_t *lf_sortedlist_node) __attribute_used__;
 
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
@@ -38,7 +38,7 @@ lf_sortedlist_node_t *lfSortedListNodeCreate(uint32_t key_, void *val_) {
   return res;
 }
 
-void lfSortedListNodeFree(lf_sortedlist_node_t *node) {
+void lfSortedListNodeFree(lf_sortedlist_node_t *node)  {
   if (node) free(node);
 }
 ////////////////////////////////////////////////////////////////////////////
@@ -67,19 +67,19 @@ static lf_sortedlist_node_t *search(lf_sorted_list_t *lst,
 
     /* 1: Find left_node and right_node */
     do {
-      if (!isMarkedPtr(tmpNext)) {
+      if (!IsMarkedPtr(tmpNext)) {
         *lNode = tmp;
         lNodeNext = tmpNext;
       }
-      tmp = unmarkedPtr(tmpNext);
+      tmp = UnmarkedPtr(tmpNext);
       if (tmp == lst->tail) break;
       tmpNext = tmp->next;
-    } while (isMarkedPtr(tmpNext) || (tmp->key < key));
+    } while (IsMarkedPtr(tmpNext) || (tmp->key < key));
     rNode = tmp;
 
     /* 2: Check nodes are adjacent */
     if (lNodeNext == rNode) {
-      if ((rNode != lst->tail) && isMarkedPtr(rNode->next)) { //already removed by another thread?
+      if ((rNode != lst->tail) && IsMarkedPtr(rNode->next)) { //already removed by another thread?
         continue; //search again
       } else {
         return rNode;
@@ -87,8 +87,8 @@ static lf_sortedlist_node_t *search(lf_sorted_list_t *lst,
     }
 
     /* 3: Remove one or more marked nodes */
-    if (CASX64Ptr((volatile void**)&(*lNode)->next, (void**) &lNodeNext, rNode)) {
-      if ((rNode != lst->tail) && isMarkedPtr(rNode->next)) { //already removed by another thread?
+    if (CASPtr((volatile void**)&(*lNode)->next, (void**) &lNodeNext, rNode)) {
+      if ((rNode != lst->tail) && IsMarkedPtr(rNode->next)) { //already removed by another thread?
         continue; //search again
       } else {
         return rNode;
@@ -110,7 +110,7 @@ uint8_t LFSortedListAdd(lf_sorted_list_t *lst,
       return LFE_ALREADY_DONE;
     }
     nNode->next = rNode;
-    if (CASX64Ptr((volatile void**)&lNode->next, (void**) &rNode, nNode))
+    if (CASPtr((volatile void**)&lNode->next, (void**) &rNode, nNode))
       return LFE_SUCCESS;
   } while (1);
 }
@@ -125,13 +125,13 @@ uint8_t LFSortedListRemove(lf_sorted_list_t *lst,
     if ((rNode == lst->tail) || (rNode->key != key))
       return LFE_FAILED;
     rNodeNext = rNode->next;
-    if (isMarkedPtr(rNodeNext))
+    if (IsMarkedPtr(rNodeNext))
       continue;
-    if (CASX64Ptr((volatile void**)&rNode->next, (void**)&rNodeNext, markedPtr(rNodeNext)))
+    if (CASPtr((volatile void**)&rNode->next, (void**)&rNodeNext, MarkedPtr(rNodeNext)))
       break;
   } while (1);
 
-  if (!CASX64Ptr((volatile void**)&lNode->next, (void**)&rNode, rNodeNext))
+  if (!CASPtr((volatile void**)&lNode->next, (void**)&rNode, rNodeNext))
     rNode = search(lst, rNode->key, &lNode);
   return LFE_SUCCESS;
 }
