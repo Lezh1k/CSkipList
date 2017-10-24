@@ -28,8 +28,8 @@ static inline void* MarkedPtr(const void *ref) {
 
 static inline int32_t GenRandomBase2(int32_t maxLevel) {
   int32_t lvl = 0;
-  while (rand() & 0x1 && ++lvl < maxLevel)
-    ;
+  while (rand() & 0x1 && lvl < maxLevel-1)
+    ++lvl;
   return lvl;
 }
 

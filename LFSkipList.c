@@ -10,24 +10,30 @@
 #include "Commons.h"
 
 //lock free skip list node
-#define MAX_LEVEL 8
+#define MAX_LEVEL 4
+
 typedef struct lf_skiplist_node {
   struct lf_skiplist_node *next[MAX_LEVEL];
   void *data;
   uint32_t key;
+  int32_t lvl;
 } __attribute__((aligned(sizeof(8)))) lf_skiplist_node_t;
 
 static lf_skiplist_node_t *lfSkipListNodeCreate(uint32_t key,
-                                                void *data);
+                                                void *data,
+                                                int32_t lvl);
 static void lfSkipListNodeFree(lf_skiplist_node_t *node) __attribute_used__;
 
+
 lf_skiplist_node_t *lfSkipListNodeCreate(uint32_t key,
-                                         void *data) {
+                                         void *data,
+                                         int32_t lvl) {
   lf_skiplist_node_t *res = (lf_skiplist_node_t*) malloc(sizeof(lf_skiplist_node_t));
   if (res == NULL) return NULL;
   memset(res->next, 0, sizeof(lf_skiplist_node_t*) * MAX_LEVEL);
   res->data = data;
   res->key = key;
+  res->lvl = lvl;
   return res;
 }
 ////////////////////////////////////////////////////////////////////////////
@@ -56,13 +62,13 @@ lf_skip_list_t* LFSkipListCreate() {
   lf_skip_list_t *lst = (lf_skip_list_t*) malloc(sizeof(lf_skip_list_t));
   if (lst == NULL)
     return NULL;
-  lst->head = lfSkipListNodeCreate(-1, NULL);
+  lst->head = lfSkipListNodeCreate(-1, NULL, 0);
   if (lst->head == NULL) {
     free(lst);
     return NULL;
   }
 
-  lst->tail = lfSkipListNodeCreate(-2, NULL);
+  lst->tail = lfSkipListNodeCreate(-2, NULL, 0);
   if (lst->tail == NULL) {
     free(lst->head);
     free(lst->tail);
@@ -127,14 +133,14 @@ lf_skiplist_node_t* searchOnLevel(lf_skip_list_t *lst,
 uint8_t LFSkipListAdd(lf_skip_list_t *lst,
                       uint32_t key,
                       void *val) {
-  int32_t cl, lvl ;
+  int32_t cl;
   lf_skiplist_node_t *lNode, *rNode, *nNode, *startNode;
   lf_skiplist_node_t **prev = (lf_skiplist_node_t**) malloc(MAX_LEVEL*sizeof(lf_skiplist_node_t*));
   if (prev == NULL)
     return LFE_FAILED;
 
-  nNode = lfSkipListNodeCreate(key, val);
-  lvl = GenRandomBase2(MAX_LEVEL);
+  nNode = lfSkipListNodeCreate(key, val,
+                               GenRandomBase2(MAX_LEVEL));
 
   do {
     startNode = lst->head;
@@ -155,8 +161,10 @@ uint8_t LFSkipListAdd(lf_skip_list_t *lst,
       continue;
 
     //inserted on 0 level
+    for (cl = 1; cl <= nNode->lvl; ++cl) {
+      if (IsMarkedPtr(nNode->next[cl]))
+        break; //somebody is removing this node. so we have to interrupt tower building
 
-    for (cl = 1; cl <= lvl; ++cl) {
       if (CASPtr((volatile void**)&prev[cl]->next[cl],
                  (void**) &nNode->next[cl], nNode)) {
         continue;
@@ -173,21 +181,60 @@ uint8_t LFSkipListAdd(lf_skip_list_t *lst,
 
     free(prev);
     return LFE_SUCCESS;
-
   } while (1);
 }
 ////////////////////////////////////////////////////////////////////////////
 
 uint8_t LFSkipListRemove(lf_skip_list_t *lst,
                          uint32_t key) {
-  UNUSED_ARG(lst);
-  UNUSED_ARG(key);
+  int32_t cl;
+  lf_skiplist_node_t *lNode, *rNode, *rNodeNext, *startNode;
+  lf_skiplist_node_t *prevNodes[MAX_LEVEL] = {0};
+
+  do {
+    startNode = lst->head;
+    for (cl = MAX_LEVEL; cl--;) {
+      rNode = searchOnLevel(lst, cl, startNode, key, &lNode);
+      prevNodes[cl] = lNode;
+      startNode = lNode;
+    }
+
+    if (rNode == lst->tail || rNode->key != key)
+      return LFE_FAILED;
+
+    for (cl = rNode->lvl + 1; cl--;) {
+      rNodeNext = rNode->next[cl];
+      if (IsMarkedPtr(rNodeNext))
+        continue;
+      if (!CASPtr((volatile void**)&rNode->next[cl], (void**)&rNodeNext, MarkedPtr(rNodeNext)))
+        break;
+    }
+
+    if (cl == -1)
+      break;
+  } while (1);
+
+  for (cl = rNode->lvl; cl >= 0; --cl) {
+    if (!CASPtr((volatile void**)&prevNodes[cl]->next[cl], (void**)&rNode, rNodeNext))
+      startNode = searchOnLevel(lst, cl, lst->head, rNode->key, &lNode);
+  }
+
   return LFE_FAILED;
 }
 ////////////////////////////////////////////////////////////////////////////
 
 uint8_t LFSkipListFind(lf_skip_list_t *lst,
                        uint32_t key) {
+  int32_t cl;
+  lf_skiplist_node_t *startNode, *rNode, *lNode;
+  startNode = lst->head;
+  for (cl = MAX_LEVEL; cl--;) {
+    rNode = searchOnLevel(lst, cl, startNode, key, &lNode);
+    if ((rNode != lst->tail) && (rNode->key == key)) {
+      return 1;
+    }
+    startNode = lNode;
+  }
   return 0;
 }
 ////////////////////////////////////////////////////////////////////////////
@@ -196,7 +243,7 @@ void LFSkipListPrint(lf_skip_list_t *lst) {
   lf_skiplist_node_t *tmp;
   int32_t i;
 
-  for (tmp = lst->head->next[0]; tmp != lst->tail; tmp = tmp->next[0]) {
+  for (tmp = lst->head; tmp != lst->tail; tmp = tmp->next[0]) {
     printf("key : %d\n", tmp->key);
     for (i = 0; i < MAX_LEVEL; ++i) {
       printf("%d\t", tmp->next[i]->key);

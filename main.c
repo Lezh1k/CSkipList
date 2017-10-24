@@ -244,20 +244,20 @@ void testSkipList() {
     pthread_join(thAdd[i], NULL);
   }
   LFSkipListPrint(lstSkip);
-  printf("\n*****************\n");
+  printf("\n*************************************************************\n");
 
   /*test remove*/
 
-//  for (i = 0; i < 3; ++i) {
-//    pthread_attr_init(&thAttrRemove[i]);
-//    pthread_create(&thRemove[i], &thAttrRemove[i], pfRemoveTest[i], NULL);
-//  }
+  for (i = 0; i < 3; ++i) {
+    pthread_attr_init(&thAttrRemove[i]);
+    pthread_create(&thRemove[i], &thAttrRemove[i], pfRemoveTest[i], NULL);
+  }
 
-//  for (i = 0; i < 3; ++i) {
-//    pthread_join(thRemove[i], NULL);
-//  }
-//  LFSkipListPrint(lstSkip);
-//  printf("\n*****************\n");
+  for (i = 0; i < 3; ++i) {
+    pthread_join(thRemove[i], NULL);
+  }
+  LFSkipListPrint(lstSkip);
+  printf("\n*************************************************************\n");
 
   /*test both*/
 
@@ -273,14 +273,15 @@ void testSkipList() {
 //    pthread_join(thRemove[i], NULL);
 //  }
 //  LFSkipListPrint(lstSkip);
-//  printf("\n*****************\n");
+//  printf("\n*************************************************************\n");
 }
 
 int main() {
-  lf_skip_list_t *lstSkip = LFSkipListCreate();
+  srand(time(NULL));
+  lstSkip = LFSkipListCreate();
   if (lstSkip == NULL)
     return 1;
-  srand(time(NULL));
+
   testSkipList();
   return 0;
 }
