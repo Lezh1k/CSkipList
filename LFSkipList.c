@@ -195,8 +195,7 @@ uint8_t LFSkipListRemove(lf_skip_list_t *lst,
     startNode = lst->head;
     for (cl = MAX_LEVEL; cl--;) {
       rNode = searchOnLevel(lst, cl, startNode, key, &lNode);
-      prevNodes[cl] = lNode;
-      startNode = lNode;
+      prevNodes[cl] = startNode = lNode;
     }
 
     if (rNode == lst->tail || rNode->key != key)
@@ -214,7 +213,7 @@ uint8_t LFSkipListRemove(lf_skip_list_t *lst,
       break;
   } while (1);
 
-  for (cl = rNode->lvl; cl >= 0; --cl) {
+  for (cl = MAX_LEVEL-1; cl >= 0; --cl) {
     if (!CASPtr((volatile void**)&prevNodes[cl]->next[cl], (void**)&rNode, rNodeNext))
       startNode = searchOnLevel(lst, cl, lst->head, rNode->key, &lNode);
   }
